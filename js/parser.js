@@ -3,8 +3,16 @@ class Parser{
 		this.sav = sav;
 		this.charMap = region;
 	}
-	getChar(i){
+	_getChar(i){
 		return this.charMap[i];
+	}
+	_getString(ofst,length){
+		let str = "";
+		for(i=ofst;i<length+ofst;i++){
+			if(this.sav.charCodeAt(i) == 0xFF) break;
+			str += _getChar(this.sav.charCodeAt(i));
+		}
+		return str;
 	}
 
 }

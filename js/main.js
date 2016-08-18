@@ -1,7 +1,7 @@
 {
 	$inputButton = document.querySelector("#inputButton");
   $fileInput = document.querySelector("#fileInput");
-  
+
 
 	if (window.File && window.FileReader && window.FileList && window.Blob) {
 	  // Great success! All the File APIs are supported.
@@ -16,7 +16,7 @@
 	FileReaderJS.setupInput($fileInput, {
 		readAsDefault: "DataURL",	
   	on:{
-  		beforestart: function(file) {
+  		beforestart: (file) => {
   			if ( file.name.split(".")[1] != 'sav'){
   				alert("Invalid save file provided");
   				return false;
@@ -27,6 +27,10 @@
   		},
   		load: (e, file) => {
   			console.log(parseTitle(file.extra.nameNoExtension));
+  			
+  		},
+  		loadend: (e,file) => {
+  			console.log("loadend");
   		}
   	}
 	});
