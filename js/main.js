@@ -53,6 +53,6 @@
 
 	function renderData(f){
 		let gameVersion = parseTitle(f.extra.nameNoExtension) || "unidentified";
-		$output.innerHTML = `<img src='assets/logo/${gameVersion}.png' height="70">`;
+		$output.innerHTML = `<img src='./assets/logo/${gameVersion}.png' height="70">`;
 	}
 }
