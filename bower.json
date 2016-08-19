@@ -1,0 +1,25 @@
+{
+  "name": "Pokehax",
+  "homepage": "https://github.com/td0/pokehax",
+  "authors": [
+    "tadho <tadho@me.com>"
+  ],
+  "description": "Pokemon save editor",
+  "main": "index.html",
+  "keywords": [
+    "save",
+    "editor",
+    "pokemon"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "file-saver": "^1.3.2"
+  }
+}
