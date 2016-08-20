@@ -1,17 +1,119 @@
+/*
+	TO-DO:
+	-check game code (x)
+	-checksum
+	-validate file checksum 
+	-...
+*/
+
 class Parser{
-	constructor(data, region="en"){
-		this.data = data;
-		this._charMap = region=="en"?en_ch:jp_ch;
-
-
+	constructor(data, version, region="en"){
+		this.data 			= data;
+		this._charMap 	= region=="en"?en_ch:jp_ch;
+		this._ver				= this._getVersion(version);
+		this._sectnPad 	= this._getSectionPad();
+		this._secCode		= this._getSecurityCode();
+		this._map 			= [{
+			//section 0
+			trainerName		: [0x0,7],
+			trainerGender	: [0x8,1],
+			trainerID			: [0xA,2],
+			secretID			: [0xC,2],
+			playTime			: [0xE,5],
+			gameCode			: [0xAC,2],
+			securityCode 	: {
+					frlg	: [0xAF8,4],
+					e			: [0xAC,4]
+				}
+		},{ //section 1
+			teamSize 	: {
+				frlg	: [0x0034,2],
+				rs 		: [0x0234,2],
+				e 		: [0x0234,2]
+			},
+			teamPokemon	: {
+				frlg	: [0x38,600],
+				rs 		: [0x238,600],
+				e 		: [0x238,600]
+			},
+			money	: {
+				frlg	: [0x290,4],
+				rs		: [0x490,4],
+				e			: [0x490,4]
+			},
+			coin	: {
+				frlg	: [0x294,2],
+				rs 		: [0x494,2],
+				e 		: [0x494,2]
+			},
+			pcItem : {
+				frlg	: [0x298,120],
+				rs 		: [0x498,200],
+				e 		: [0x498,200]
+			},
+			item : {
+				frlg  : [0x310,168],
+				rs 		: [0x560,80],
+				e 		: [0x560,120]
+			},
+			itemKey : {
+				frlg	: [0x3B8,120],
+				rs 		: [0x5B8,80],
+				e 		: [0x5D8,120]
+			},	
+			itemBall : {
+				frlg 	: [0x430,52],
+				rs 		: [0x600,64],
+				e 		: [0x650,64]
+			},
+			itemTM 	:{
+				frlg	: [0x464,232],
+				rs 		: [0x640,256],
+				e 		: [0x690,256]
+			},
+			itemBerry : {
+				frlg	: [0x54C,172],
+				rs 		: [0x740,184],
+				e 		: [0x790,184]
+			}
+		},{ //section 4
+			rivalName : [0xBCC,8]
+		}];
+		this._padMap();
 	}
-	_chekSum(section=0){
+
+	_checkSum(section){
 		let sum = 0;
-		for(let i = 0; i<sumBytes[section];){
-			break;
+		for(let i=this._sectnPad[section]; i<this._sectnPad[section]+sumBytes[section];i+=4){
+			sum = (sum + this._getInt([i,4]))>>>0;
 		}
+		sum=((sum-((sum>>>16)<<16))+(sum>>>16)>>>0)%0x10000;
+		return [sum,this._getInt([this._sectnPad[section]+0xFF6,2])];
 	}
-	_getInt([ofst,size],str=false){ //set str to true to receive stringified-hex.
+	_getVersion(v){
+		if(v=="leafgreen"||v=="firered") return "frlg";
+		else if(v=="ruby"||v=="sapphire") return "rs";
+		else return "e";
+	}
+	_padMap(){ // Adds padding to map of properties offset
+		for(let k of Object.keys(this._map)){ //someone said it is bad to use for(..in), hence for(..of) used instead
+			for(let prop of Object.keys(this._map[k])){
+				if(Array.isArray(this._map[k][prop])) this._map[k][prop][0] += this._sectnPad[k];
+				else for(let ver of Object.keys(this._map[k][prop]))this._map[k][prop][ver][0] += this._sectnPad[k];
+			}
+		} 
+	}
+	_getSectionPad(){	//each save file has different order of section. it sequences the section order
+		let head = this._getInt([0xFFC,4])>this._getInt([0xEFFC,4])?0:0xE000;
+		let pads=[];
+		for(let i=head; i<head+(0x1000*14); i+=0x1000){
+			let idx = this._getInt([i+0xFF4,2]);
+			pads[idx]=i;
+		}
+		return pads;
+	}
+
+	_getInt([ofst,size],str=false){ //set str to true to receive stringified-hexadecimal value.
 		let charSet = "";
 		for(let i=ofst+size-1;i>=ofst;i--){ //this loop runs on decrement, little-endian bruh!
 			let temp = this.data.charCodeAt(i).toString(16);
@@ -20,11 +122,11 @@ class Parser{
 		}
 		return str?charSet:parseInt("0x"+charSet);
 	}
-	_getChar(i){
+	_getChar(i){ //get hex value of single byte data at i arg
 		let hex = this.data.charCodeAt(i).toString(16);
 		return hex.length == 2?hex:"0"+hex ;
 	}
-	_getString([ofst,size],debug=false){
+	_getString([ofst,size],debug=false){ //get propietary encoded string
 		let str = "";
 		for(let i=ofst; i<ofst+size; i++){	 //the string however, runs on increment		
 			if(this.data.charCodeAt(i)==0xFF || debug) break;
@@ -32,55 +134,33 @@ class Parser{
 		}
 		return str;
 	}
-
+	//section 0
 	getTrainerName(){
-		return this._getString(dataMap.trainerName);
+		return this._getString(this._map[0].trainerName);
 	}
 	getTrainerGender(){
 		return this.data.charCodeAt(0x2008)==0?"Male":"Female";
 	}
 	getTrainerID(){
-		return [this._getInt(dataMap.trainerID[0]),this._getInt(dataMap.trainerID[1])];
+		return [this._getInt(this._map[0].trainerID),
+			this._getInt(this._map[0].secretID)];
 	}
-
-
-	// Tis' debug 'em
-	encdStr(s){
-		let res = "";
-		for(let i=0; i<s.length; i++){
-			res += en_ch.indexOf(s[i]).toString(16).toUpperCase();
-		}
-		return res;
+	getGameVersion(){
+		return this._getInt(this._map[0].gameCode);
 	}
-	dcdStr(s){
-		s=s.replace(/ /g,'');
-		let [res,f,temp] = ["",false,"0x"];
-		for(let i =0; i<s.length;i++){
-			temp += s[i];
-			if(f){	
-				res+=en_ch[parseInt(temp)];
-				temp = "0x";
-			}
-			f=!f;
-		}
-		return res;
+	getPlayTime(){
+		let pTime = this._map[0].playTime;
+		let [hour,minutes,second] = [[pTime[0],2] , [pTime[0]+2,1] , [pTime[0]+3,1]]; 
+		return [this._getInt(hour),this._getInt(minutes),this._getInt(second)];
+	}
+	//section 1
+	getTeamSize(){
+		return this._getInt(this._map[1].teamSize[this._ver]);
 	}
 }
 
 
-var sumBytes = [3884,3968,3968,3968,3848,3968,3968,3968,3968,3968,3968,3968,2000];
-//Here be dragons
-var dataMap = {
-	trainerName : [0x2000,7],
-	trainerGender : [0x2008,1],
-	trainerID : [[0x200A,2],[0x200C,2]],
-	timePlayed : [0x200E,5],
-	gameCode : [0x20AC,4],
-	securityCode : {
-		frlg : [0x2AF8,4],
-		e : [0x20AC,4]
-	}
-};
+var sumBytes =  [3884,3968,3968,3968,3848,3968,3968,3968,3968,3968,3968,3968,2000];
 
 var en_ch = 
 	[" ", "À", "Á", "Â", "Ç", "È", "É", "Ê", "Ë", "Ì", "こ", "Î", "Ï", "Ò", "Ó", "Ô",
@@ -98,7 +178,7 @@ var en_ch =
 	"F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U",
 	"V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
 	"l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "▶",
-	":", "Ä", "Ö", "Ü", "ä", "ö", "ü", "⬆", "⬇", "⬅", "[1]","[2]","[3]","[4]","<br />", "[0]"];
+	":", "Ä", "Ö", "Ü", "ä", "ö", "ü", "⬆", "⬇", "⬅", "\\1","\\2","\\3","\\4","<br />", "\\0"];
 
 var jp_ch =
 	[" ", "あ", "い", "う", "え", "お", "か", "き", "く", "け", "こ", "さ", "し", "す", "せ", "そ",
@@ -116,7 +196,28 @@ var jp_ch =
 	"F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U",
 	"V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
 	"l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "▶",
-	":", "Ä", "Ö", "Ü", "ä", "ö", "ü", "⬆", "⬇", "⬅", "[1]","[2]","[3]","[4]","<br />", "[0]"];
+	":", "Ä", "Ö", "Ü", "ä", "ö", "ü", "⬆", "⬇", "⬅", "\\1","\\2","\\3","\\4","<br />", "\\0"];
 
 
 
+// Tis' debug 'em
+function encdStr(s){
+	let res = "";
+	for(let i=0; i<s.length; i++){
+		res += en_ch.indexOf(s[i]).toString(16).toUpperCase();
+	}
+	return res;
+}
+function dcdStr(s){
+	s=s.replace(/ /g,'');
+	let [res,f,temp] = ["",false,"0x"];
+	for(let i =0; i<s.length;i++){
+		temp += s[i];
+		if(f){	
+			res+=en_ch[parseInt(temp)];
+			temp = "0x";
+		}
+		f=!f;
+	}
+	return res;
+}

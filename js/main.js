@@ -2,8 +2,7 @@
 	$inputButton = document.querySelector("#inputButton");
   $fileInput = document.querySelector("#fileInput");
   $output = document.querySelector("#outputSection");
-  var fileName = "";
-  var s = new Parser();
+  var s;
 
 	if (window.File && window.FileReader && window.FileList && window.Blob) {
 	  // Great success! All the File APIs are supported.
@@ -19,7 +18,7 @@
 		readAsDefault: "BinaryString",	
   	on:{
   		beforestart: (file) => {
-  			if ( file.name.split(".")[1] != 'sav'){
+  			if ( file.name.split(".").pop().toLowerCase() != 'sav'){
   				alert("Invalid save file provided");
   				return false;
   			}else if (file.size > 131072){
@@ -28,27 +27,25 @@
   			}
   		},
   		load: (e, file) => {
-  			// fileName = file.extra.nameNoExtension;
-  			// console.log(parseTitle(fileName));
-  			// console.log (e.currentTarget.result);
-  			s.data = e.currentTarget.result;
+
+  			s = new Parser(e.currentTarget.result,parseTitle(file.extra.nameNoExtension));
   			renderData(file);
   		},
   		loadend: (e,file) => {
-  			console.log("loadend");
+  			console.log(parseTitle(file.extra.nameNoExtension) +" Loaded");
   		}
   	}
 	});
 
 	function parseTitle(fn){
-		fn = fn || fileName;
-		fn = fn.toLowerCase().replace(/ /g,"");
+		fn = fn || "unidentified";
+		fn = fn.toLowerCase().replace(/[^A-Za-z0-9!?]/g,"");
 		let titles = ['firered','leafgreen','emerald','ruby','sapphire','fr','lg'];
 		let i = 0;
 		for(;i<titles.length;i++){
 			if (fn.search(titles[i])!=-1) break;
 		}
-		return i<7?titles[i%4]:false;
+		return i<7?titles[i%5]:false;
 	}
 
 	function renderData(f){
