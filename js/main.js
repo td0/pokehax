@@ -21,18 +21,23 @@
   			if ( file.name.split(".").pop().toLowerCase() != 'sav'){
   				alert("Invalid save file provided");
   				return false;
-  			}else if (file.size > 131072){
-  				alert("File size is too big!");
+  			}else if (file.size > 131072 && file.size<61000){
+  				alert("File size is wrong! f*ck you :)");
   				return false;
   			}
   		},
   		load: (e, file) => {
-
-  			s = new Parser(e.currentTarget.result,parseTitle(file.extra.nameNoExtension));
-  			renderData(file);
+  			try{
+	  			s = new Parser(e.currentTarget.result,parseTitle(file.extra.nameNoExtension));	  			
+	  		}catch(e){
+				s = null;
+				alert(`${e.name}: ${e.message}`);
+				clearData();
+	  		}
+	  		if(s!=null)renderData(file);
   		},
   		loadend: (e,file) => {
-  			console.log(parseTitle(file.extra.nameNoExtension) +" Loaded");
+  			console.log(file.extra.nameNoExtension +" Loaded");
   		}
   	}
 	});
@@ -51,5 +56,8 @@
 	function renderData(f){
 		let gameVersion = parseTitle(f.extra.nameNoExtension) || "unidentified";
 		$output.innerHTML = `<img src='./assets/logo/${gameVersion}.png' height="70">`;
+	}
+	function clearData(){
+		$output.innerHTML = `<h2>Select another .sav file</h2>`;
 	}
 }

@@ -1,18 +1,36 @@
 /*
 	TO-DO:
-	-check game code (x)
-	-checksum
-	-validate file checksum 
+	# API side
+	//-validate the file by checksumming (can also be used as bogus file detector)
+	-map pokemon data structure
+	-do party pokemon thing
+	-do the PC
+	-do item stuffs inside the bag
+	-and the PC ofc
+	-learn pokedex
+	##reading job is done. WRITE!
+	-copy data file into another var, for revert purpose
+	-write being done on main data, back-up should be untouchable
+	-do checksum when all things have been modified
+	-shiny-nature PID calculation (IV can be hax without touchings the PID)
+	# I think we should move to the interface
 	-...
+
+	currently i've done {feature_count} features / API call
+	feature_count = 7;
 */
 
 class Parser{
 	constructor(data, version, region="en"){
 		this.data 			= data;
+		this._sectnPad 	= this._getSectionPad();
+		try{
+			if(this._validateFile()!=true) throw new Error("validation failed");
+		}catch(e){
+			throw new Error("file might be corrupt, or is it a bogus file?");
+		}
 		this._charMap 	= region=="en"?en_ch:jp_ch;
 		this._ver				= this._getVersion(version);
-		this._sectnPad 	= this._getSectionPad();
-		this._secCode		= this._getSecurityCode();
 		this._map 			= [{
 			//section 0
 			trainerName		: [0x0,7],
@@ -27,9 +45,9 @@ class Parser{
 				}
 		},{ //section 1
 			teamSize 	: {
-				frlg	: [0x0034,2],
-				rs 		: [0x0234,2],
-				e 		: [0x0234,2]
+				frlg	: [0x34,2],
+				rs 		: [0x234,2],
+				e 		: [0x234,2]
 			},
 			teamPokemon	: {
 				frlg	: [0x38,600],
@@ -80,26 +98,41 @@ class Parser{
 			rivalName : [0xBCC,8]
 		}];
 		this._padMap();
+		this._secCode		= this._ver=="rs"? 0 : this._getSecurityCode();
 	}
 
-	_checkSum(section){
-		let sum = 0;
-		for(let i=this._sectnPad[section]; i<this._sectnPad[section]+sumBytes[section];i+=4){
+	_checkSum(s){ //checksum, the formulae can be seen at bulbapedia gen 3 save data structure
+		if(s>13||s<0) return false;
+		let sum 		= 0;
+		let sctnpad = this._sectnPad[s];
+		for(let i=sctnpad;i<sctnpad+sumBytes[s];i+=4){
 			sum = (sum + this._getInt([i,4]))>>>0;
 		}
 		sum=((sum-((sum>>>16)<<16))+(sum>>>16)>>>0)%0x10000;
-		return [sum,this._getInt([this._sectnPad[section]+0xFF6,2])];
+		let dataSum = this._getInt([sctnpad+0xFF6,2]);
+		return (sum==dataSum)?true:[false,sum.toString(16),dataSum.toString(16)];
+	}
+	_validateFile(){
+		for(let i=0;i<14;i++){
+			let v = this._checkSum(i);
+			if(v!==true) return false;
+		}
+		return true;
+	}
+	_getSecurityCode(){
+		return this._getInt(this._map[0].securityCode[this._ver] );
 	}
 	_getVersion(v){
 		if(v=="leafgreen"||v=="firered") return "frlg";
 		else if(v=="ruby"||v=="sapphire") return "rs";
 		else return "e";
 	}
-	_padMap(){ // Adds padding to map of properties offset
+	_padMap(){ // Adds padding to the map
 		for(let k of Object.keys(this._map)){ //someone said it is bad to use for(..in), hence for(..of) used instead
 			for(let prop of Object.keys(this._map[k])){
 				if(Array.isArray(this._map[k][prop])) this._map[k][prop][0] += this._sectnPad[k];
-				else for(let ver of Object.keys(this._map[k][prop]))this._map[k][prop][ver][0] += this._sectnPad[k];
+				else 
+					for(let ver of Object.keys(this._map[k][prop]))this._map[k][prop][ver][0] += this._sectnPad[k];
 			}
 		} 
 	}
@@ -112,7 +145,6 @@ class Parser{
 		}
 		return pads;
 	}
-
 	_getInt([ofst,size],str=false){ //set str to true to receive stringified-hexadecimal value.
 		let charSet = "";
 		for(let i=ofst+size-1;i>=ofst;i--){ //this loop runs on decrement, little-endian bruh!
@@ -134,12 +166,16 @@ class Parser{
 		}
 		return str;
 	}
-	//section 0
+	//section 0 <5>
 	getTrainerName(){
 		return this._getString(this._map[0].trainerName);
 	}
 	getTrainerGender(){
-		return this.data.charCodeAt(0x2008)==0?"Male":"Female";
+		let gender = this.data.charCodeAt(this._map[0].trainerGender);
+		if(gender==0) return "Male";
+		else if(gender==1) return "Female";
+		else return "something went wrong";
+		// return this.data.charCodeAt(this._map[0].trainerGender)==0?"Male":"Female";
 	}
 	getTrainerID(){
 		return [this._getInt(this._map[0].trainerID),
@@ -157,10 +193,13 @@ class Parser{
 	getTeamSize(){
 		return this._getInt(this._map[1].teamSize[this._ver]);
 	}
+	getMoney(){
+		return this._getInt(this._map[1].money[this._ver])^this._secCode;
+	}
 }
 
 
-var sumBytes =  [3884,3968,3968,3968,3848,3968,3968,3968,3968,3968,3968,3968,2000];
+var sumBytes =  [3884,3968,3968,3968,3848,3968,3968,3968,3968,3968,3968,3968,3968,2000];
 
 var en_ch = 
 	[" ", "À", "Á", "Â", "Ç", "È", "É", "Ê", "Ë", "Ì", "こ", "Î", "Ï", "Ò", "Ó", "Ô",
@@ -197,8 +236,6 @@ var jp_ch =
 	"V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
 	"l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "▶",
 	":", "Ä", "Ö", "Ü", "ä", "ö", "ü", "⬆", "⬇", "⬅", "\\1","\\2","\\3","\\4","<br />", "\\0"];
-
-
 
 // Tis' debug 'em
 function encdStr(s){
